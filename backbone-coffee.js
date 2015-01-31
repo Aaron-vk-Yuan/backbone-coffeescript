@@ -41,11 +41,119 @@
 
   /*Events事件对象 */
   Events = Backbone.Events = {
-    on: function(name, callback, context) {},
-    once: function(name, callback, context) {},
-    off: function(name, callback, context) {},
-    trigger: function(name) {},
-    stopListening: function(obj, name, callback) {}
+
+    /*绑定事件 */
+    on: function(name, callback, context) {
+      var events;
+      if (!eventsApi(this, 'on', name, [callback, context] || !callback)) {
+        return this;
+      }
+      this._events || (this._events = {});
+      events = this._events[name] || (this._events = []);
+      events.push({
+        callback: callback,
+        context: context,
+        ctx: context || this
+      });
+      return this;
+    },
+
+    /*仅绑定一次事件 */
+    once: function(name, callback, context) {
+      var once, self;
+      if (!eventsApi(this, 'once', name, [callback, context] || !callback)) {
+        return this;
+      }
+      self = this;
+      once = _.once(function() {
+        self.off(name, once);
+        callback.apply(this, arguments);
+        return this;
+      });
+      once._callback = callback;
+      return this.on(name, once, context);
+    },
+
+    /*解除事件 */
+    off: function(name, callback, context) {
+      var event, events, names, remaining, _i, _j, _len, _len1;
+      if (!eventsApi(this, 'off', name, [callback, context])) {
+        return this;
+      }
+      if (!name && !callback && !context) {
+        return this;
+      }
+      names = name ? [name] : _.keys(this._events);
+      for (_i = 0, _len = names.length; _i < _len; _i++) {
+        name = names[_i];
+        events = this._events[name];
+        if (!events) {
+          continue;
+        }
+        if (!callback && !context) {
+          delete this._events[name];
+          continue;
+        }
+        remaining = [];
+        for (_j = 0, _len1 = events.length; _j < _len1; _j++) {
+          event = events[_j];
+          if (callback && callback !== event.callback && callback !== event.callback._callback || context && context !== event.context) {
+            remaining.push(evnet);
+          }
+        }
+        if (remaining.length) {
+          this._events[name] = remaining;
+        } else {
+          delete this._events[name];
+        }
+      }
+      return this;
+    },
+
+    /*触发事件 */
+    trigger: function(name) {
+      var allEvents, args, evnets;
+      if (!this._events) {
+        return this;
+      }
+      args = slice.call(arguments, 1);
+      if (!eventsApi(this, 'trigger', name, args)) {
+        return this;
+      }
+      evnets = this._events[name];
+      allEvents = this._events.all;
+      if (events) {
+        triggerEvents(evnets, args);
+      }
+      if (allEvents) {
+        triggerEvents(allEvents, arguments);
+      }
+      return this;
+    },
+
+    /*停止监听事件 */
+    stopListening: function(obj, name, callback) {
+      var id, listeningTo, remove;
+      listeningTo = this._listeningTo;
+      if (!listeningTo) {
+        return this;
+      }
+      remove = !name && !callback;
+      if (!callback && typeof name === 'object') {
+        callback = this;
+      }
+      if (obj) {
+        (listeningTo = {})[obj._listenId] = obj;
+      }
+      for (id in listeningTo) {
+        obj = listeningTo[id];
+        obj.off(name, callback, this);
+        if (remove || _.isEmpty(obj._events)) {
+          delete this._listeningTo[id];
+        }
+      }
+      return this;
+    }
   };
 
   /*事件拆分器-正则 */
@@ -57,10 +165,10 @@
   	事件绑定关键函数,将事件跟对象自身的事件处理程序关联起来
   	1.对同一个元素同时绑定多个事件监听
   	2.实现类似jQuery 的事件json格式映射方式
-  	 *obj - 
-  	 *action - 
-  	 *name - 
-  	 *rest -
+  	 *obj - 当前对象
+  	 *action - on,once
+  	 *name - 事件名称
+  	 *rest - 后续参数
    */
   eventsApi = function(obj, action, name, rest) {
     var eventName, key, names, _i, _len;
@@ -69,7 +177,7 @@
     }
     if (typeof name === 'object') {
       for (key in name) {
-        obj[action].apply(obj, [key, name[key].contcat(rest)]);
+        obj[action].apply(obj, [key, name[key]].contcat(rest));
       }
       false;
     }
@@ -93,6 +201,49 @@
   	???不大明白作用？
   	触发事件
    */
-  triggerEvents = function(events, args) {};
+  triggerEvents = function(events, args) {
+    var ev, first, i, len, second, third, _results, _results1, _results2, _results3, _results4;
+    len = events.length;
+    i = -1;
+    first = args[0];
+    second = args[1];
+    third = args[2];
+    switch (args.length) {
+      case 0:
+        _results = [];
+        while (++i < l) {
+          _results.push((ev = events[i]).callback.call(ev.ctx));
+        }
+        return _results;
+        break;
+      case 1:
+        _results1 = [];
+        while (++i < l) {
+          _results1.push((ev = events[i]).callback.call(ev.ctx, first));
+        }
+        return _results1;
+        break;
+      case 2:
+        _results2 = [];
+        while (++i < l) {
+          _results2.push((ev = events[i]).callback.call(ev.ctx, first, second));
+        }
+        return _results2;
+        break;
+      case 3:
+        _results3 = [];
+        while (++i < l) {
+          _results3.push((ev = events[i]).callback.call(ev.ctx, first, second, third));
+        }
+        return _results3;
+        break;
+      default:
+        _results4 = [];
+        while (++i < l) {
+          _results4.push((ev = events[i]).callback.apply(ev.ctx, args));
+        }
+        return _results4;
+    }
+  };
   return Backbone;
 });

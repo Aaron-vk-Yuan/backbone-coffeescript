@@ -5,11 +5,23 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 <title>backbone test page</title>
 <script type="text/javascript" src="backbone-coffee.js"></script>
+<script type="text/javascript" src="underscore.js"></script>
 </head>
 <body>
     <h1>Backbone 测试</h1>
+    <input type="button" value="test ON " id="btnTestON">
     <script type="text/javascript">
     console.log(Backbone);
+    var btnTestOn = document.getElementById('btnTestON');
+    btnTestON.onclick =function(){
+    	console.log(123);
+    };
+    function sayHi (argument) {
+    	console.log('hi~');
+    }
+
+    Backbone.Events.on('click', sayHi);
+
     </script>
 </body>
 </html>
