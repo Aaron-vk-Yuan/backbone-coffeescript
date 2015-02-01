@@ -84,28 +84,6 @@
 					@_events[name] = remaining
 				else
 					delete @_events[name]
-			
-			# findRemaining = (event)->
-			# 	if callback and callback isnt event.callback and callback isnt event.callback._callback or context and context isnt event.context
-			# 		remaining.push event
-			# 	remaining
-			# self = @
-			# deleteEvent = (name)->
-			# 	events = self._events[name]
-			# 	if !events
-			# 		continue
-			# 	if !callback and !context
-			# 		delete self._events[name]
-			# 		continue
-			# 	remaining = findRemaining event for event in events
-
-			# 	if remaining.length
-			# 		self._events[name] = remaining
-			# 	else
-			# 		delete self._events[name]
-
-			# deleteEvent name for name in names		
-
 			@
 
 		###触发事件###
@@ -176,11 +154,46 @@
 		second = args[1]
 		third = args[2]
 		switch args.length
-			when 0 then (ev = events[i]).callback.call ev.ctx while ++i < l
-			when 1 then (ev = events[i]).callback.call ev.ctx, first while ++i < l
-			when 2 then (ev = events[i]).callback.call ev.ctx, first, second while ++i < l
-			when 3 then (ev = events[i]).callback.call ev.ctx, first, second, third while ++i < l
-			else (ev = events[i]).callback.apply ev.ctx, args while ++i < l
+			when 0
+				while ++i < l
+					(ev = events[i]).callback.call ev.ctx
+				return
+			when 1
+				while ++i < l
+					(ev = events[i]).callback.call ev.ctx, first
+				return
+			when 2
+				while ++i < l
+					(ev = evnets[i]).callback.call ev.ctx, first, second
+				return
+			when 3
+				while ++i < l
+					(ev = events[i]).callback.call ev.ctx, first,second, third
+				return
+			else
+				(ev = events[i]).callback.call ev.ctx, args
+				return
+		@
+
+	lishtenMethods = 
+		listenTo: 'on'
+		listenToOnce: 'once'
+			
+	###监听本对象的事件###
+	_.each lishtenMethods, (implementation, method)->
+		Events[method] = (obj, name, callback)->
+			listeningTo = @_listeningTo || (@_listeningTo = {})
+			id = obj._listenId || (obj._listenId = _.uniqueId 'l')
+			listeningTo[id] = obj
+			if !callback and typeof name is 'object'
+				callback = @
+			obj[implementation] name, callback, @
+
+	###定义bind和unbind###
+	Events.bind = Events.on
+	Events.unbind = Events.off	
+
+	_.extend Backbone, Events
 			
 		
 

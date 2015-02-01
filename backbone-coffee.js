@@ -22,7 +22,7 @@
 })(this, function(root, Backbone, _, $) {
 
   /*缓存外部Backbone变量，防止改变原有值 */
-  var Events, array, eventSplitter, eventsApi, previousBackbone, slice, triggerEvents;
+  var Events, array, eventSplitter, eventsApi, lishtenMethods, previousBackbone, slice, triggerEvents;
   previousBackbone = root.Backbone;
   array = [];
   slice = array.slice;
@@ -202,7 +202,7 @@
   	触发事件
    */
   triggerEvents = function(events, args) {
-    var ev, first, i, len, second, third, _results, _results1, _results2, _results3, _results4;
+    var ev, first, i, len, second, third;
     len = events.length;
     i = -1;
     first = args[0];
@@ -210,40 +210,53 @@
     third = args[2];
     switch (args.length) {
       case 0:
-        _results = [];
         while (++i < l) {
-          _results.push((ev = events[i]).callback.call(ev.ctx));
+          (ev = events[i]).callback.call(ev.ctx);
         }
-        return _results;
-        break;
+        return;
       case 1:
-        _results1 = [];
         while (++i < l) {
-          _results1.push((ev = events[i]).callback.call(ev.ctx, first));
+          (ev = events[i]).callback.call(ev.ctx, first);
         }
-        return _results1;
-        break;
+        return;
       case 2:
-        _results2 = [];
         while (++i < l) {
-          _results2.push((ev = events[i]).callback.call(ev.ctx, first, second));
+          (ev = evnets[i]).callback.call(ev.ctx, first, second);
         }
-        return _results2;
-        break;
+        return;
       case 3:
-        _results3 = [];
         while (++i < l) {
-          _results3.push((ev = events[i]).callback.call(ev.ctx, first, second, third));
+          (ev = events[i]).callback.call(ev.ctx, first, second, third);
         }
-        return _results3;
-        break;
+        return;
       default:
-        _results4 = [];
-        while (++i < l) {
-          _results4.push((ev = events[i]).callback.apply(ev.ctx, args));
-        }
-        return _results4;
+        (ev = events[i]).callback.call(ev.ctx, args);
+        return;
     }
+    return this;
   };
+  lishtenMethods = {
+    listenTo: 'on',
+    listenToOnce: 'once'
+  };
+
+  /*监听本对象的事件 */
+  _.each(lishtenMethods, function(implementation, method) {
+    return Events[method] = function(obj, name, callback) {
+      var id, listeningTo;
+      listeningTo = this._listeningTo || (this._listeningTo = {});
+      id = obj._listenId || (obj._listenId = _.uniqueId('l'));
+      listeningTo[id] = obj;
+      if (!callback && typeof name === 'object') {
+        callback = this;
+      }
+      return obj[implementation](name, callback, this);
+    };
+  });
+
+  /*定义bind和unbind */
+  Events.bind = Events.on;
+  Events.unbind = Events.off;
+  _.extend(Backbone, Events);
   return Backbone;
 });
