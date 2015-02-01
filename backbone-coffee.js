@@ -22,7 +22,7 @@
 })(this, function(root, Backbone, _, $) {
 
   /*缓存外部Backbone变量，防止改变原有值 */
-  var Events, array, eventSplitter, eventsApi, lishtenMethods, previousBackbone, slice, triggerEvents;
+  var Events, Model, array, eventSplitter, eventsApi, lishtenMethods, modelMethods, previousBackbone, slice, triggerEvents;
   previousBackbone = root.Backbone;
   array = [];
   slice = array.slice;
@@ -39,7 +39,9 @@
   Backbone.emulateHTTP = false;
   Backbone.emulateJSON = false;
 
-  /*Events事件对象 */
+  /*
+  	 * Events事件对象
+   */
   Events = Backbone.Events = {
 
     /*绑定事件 */
@@ -81,6 +83,7 @@
         return this;
       }
       if (!name && !callback && !context) {
+        this._events = {};
         return this;
       }
       names = name ? [name] : _.keys(this._events);
@@ -258,5 +261,120 @@
   Events.bind = Events.on;
   Events.unbind = Events.off;
   _.extend(Backbone, Events);
+
+  /* 
+  	Model对象
+   */
+  Model = Backbone.Model = function(attributes, options) {
+    var attrs;
+    attrs = attributes || {};
+    options || (options = {});
+    this.cid = _.uniqueId('c');
+    this.attributes = {};
+    if (options.collection) {
+      this.collection = options.collection;
+    }
+    if (options.parse) {
+      attrs = this.parse(attrs, options || {});
+    }
+    attrs = _.defaults({}, attrs, _.result(this, 'defaults'));
+    this.set(attrs, options);
+    this.changed = {};
+    this.initialize.apply(this, arguments);
+    return this;
+  };
+
+  /*扩展Model对象 */
+  _.extend(Model.prototype, Events, {
+
+    /*标记属性是否被修改过 */
+    changed: null,
+
+    /*验证 */
+    validationError: null,
+    isAttribute: 'id',
+
+    /*初始化 */
+    initialize: function() {},
+
+    /*返回对象所有属性的副本 */
+    toJson: function(options) {
+      return _.clone(this.attributes);
+    },
+    sync: function() {
+      return this.attributes[attr];
+    },
+
+    /*读取属性 */
+    get: function(attr) {
+      return this.attributes[attr];
+    },
+
+    /*转义 */
+    escape: function(attr) {
+      return _.escape(this.get(attr));
+    },
+    has: function(attr) {
+      return this.get(attr !== null);
+    },
+
+    /*设置属性值 */
+    set: function(key, val, options) {},
+    unset: function(attr, options) {
+      return this.set(attr, {}, _.extend({}, options, {
+        unset: true
+      }));
+    },
+
+    /*清除所有属性值 */
+    clear: function(options) {
+      var attrs, key, _i, _len, _ref;
+      attrs = {};
+      _ref = this.attributes;
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        key = _ref[_i];
+        attrs[key] = null;
+      }
+      return this.set(attrs, _.extend({}, options, {
+        unset: true
+      }));
+    },
+
+    /*判断属性是否修改过 */
+    hasChanged: function(attr) {
+      if (attr === null) {
+        return !_.isEmpty(this.changed);
+      }
+      return _.has(this.changed, attr);
+    },
+    changeAttributes: function(diff) {},
+    previous: function(attr) {},
+    previousAttributes: function() {},
+
+    /*获取数据 */
+    fetch: function(options) {},
+    save: function(key, val, options) {},
+    destroy: function(options) {},
+    url: function() {},
+    parse: function(resp, options) {},
+    clone: function() {},
+    isNew: function() {},
+    isValid: function(options) {},
+    _validate: function(attrs, options) {}
+  });
+
+  /*Model对象需要实现underscore的方法列表 */
+  modelMethods = ['keys', 'values', 'pairs', 'invert', 'pick', 'omit'];
+  _.each(modelMethods, function(method) {
+    if (!_[method]) {
+      return;
+    }
+    return Model.prototype[method] = function() {
+      var args;
+      args = slice.call(arguments);
+      args.unshift(this.attributes);
+      return _[method].apply(_, args);
+    };
+  });
   return Backbone;
 });

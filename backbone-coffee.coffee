@@ -38,7 +38,9 @@
 	Backbone.emulateHTTP = false
 	Backbone.emulateJSON = false
 
-	###Events事件对象###
+	###
+	# Events事件对象
+	###
 	Events = Backbone.Events = 
 		###绑定事件###
 		on: (name,callback, context)->
@@ -65,7 +67,8 @@
 		off: (name, callback, context)->
 			return @ if !eventsApi @, 'off', name, [callback, context]
 			if !name && !callback && !context
-				# @_events = void 0
+				# @_events = void(0)
+				@_events = {}
 				return @
 			names = if name then [name] else  _.keys @_events
 			for name in names
@@ -195,7 +198,102 @@
 
 	_.extend Backbone, Events
 			
-		
+	### 
+	Model对象
+	###
+	Model = Backbone.Model = (attributes,options)->
+		attrs = attributes || {}
+		options|| options = {}
+		@cid = _.uniqueId 'c'
+		@attributes = {}
+		if options.collection 
+			@collection = options.collection
+		if options.parse
+			attrs = @parse attrs, options || {}
+		attrs = _.defaults {}, attrs, _.result @, 'defaults'
+		@set attrs, options
+		@changed = {}
+		@initialize.apply @,arguments
+		@
+
+	###扩展Model对象###
+	_.extend Model.prototype, Events,
+		###标记属性是否被修改过###
+		changed: null
+		###验证###
+		validationError:null
+
+		isAttribute:'id'
+		###初始化###
+		initialize: ->
+
+		###返回对象所有属性的副本###
+		toJson: (options)->
+			_.clone @attributes
+		sync: ->
+			@attributes[attr]
+		###读取属性###
+		get: (attr)->
+			@attributes[attr]
+		###转义###
+		escape: (attr)->
+			_.escape @get attr
+		has: (attr)->
+			@get attr != null
+		###设置属性值###
+		set: (key, val, options)->
+
+		unset: (attr, options)->
+			@set attr, {}, _.extend {}, options,
+				unset: true
+		###清除所有属性值###
+		clear: (options)->
+			attrs = {}
+			attrs[key] = null for key in @attributes
+			@set attrs, _.extend {}, options,
+				unset: true
+		###判断属性是否修改过###
+		hasChanged: (attr)->
+			if attr is null 
+				return !_.isEmpty @changed
+			_.has @changed, attr
+		changeAttributes: (diff)->
+
+		previous: (attr)->
+
+		previousAttributes: ->
+
+		###获取数据###
+		fetch: (options)->
+
+		save: (key, val, options)->
+
+		destroy: (options)->
+
+		url: ->
+
+		parse: (resp, options)->
+
+		clone: ->
+
+		isNew: ->
+
+		isValid: (options)->
+
+		_validate: (attrs, options)->
+
+	###Model对象需要实现underscore的方法列表###
+	modelMethods = ['keys', 'values', 'pairs', 'invert', 'pick', 'omit']
+
+	_.each modelMethods, (method)->
+		return if not _[method]
+		Model.prototype[method] = ->
+			args = slice.call arguments
+			args.unshift @attributes
+			_[method].apply _,args	
+
+
+
 
 
 
