@@ -7,6 +7,8 @@
  * @version 0.0.1
  * Backbone.js code: https://github.com/Aaron-vk-Yuan/backbone/blob/master/backbone.js
  */
+var __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; };
+
 (function(root, factory) {
   var _;
   if (typeof define === 'function' && define.amd) {
@@ -301,8 +303,10 @@
     toJson: function(options) {
       return _.clone(this.attributes);
     },
+
+    /*Backbone.sync 代理，可以自重写 */
     sync: function() {
-      return this.attributes[attr];
+      return Backbone.sync.apply(this, arguments);
     },
 
     /*读取属性 */
@@ -319,7 +323,67 @@
     },
 
     /*设置属性值 */
-    set: function(key, val, options) {},
+    set: function(key, val, options) {
+      var attr, attrs, c, changes, changing, current, prev, silent, unset, _i, _len, _ref;
+      if (key === null) {
+        return this;
+      }
+      if (typeof key === 'object') {
+        attrs = key;
+        options = val;
+      } else {
+        (attrs = {})[key] = val;
+      }
+      options || (options = {});
+      if (!this._validate(attrs, options)) {
+        return false;
+      }
+      unset = options.unset;
+      silent = options.silent;
+      changes = [];
+      changing = this._changing;
+      this._changing = true;
+      if (!changing) {
+        this._previousAttributes = _.clone(this.attributes);
+        this.changed = {};
+      }
+      current = this.attributes;
+      prev = this._previousAttributes;
+      if (_ref = this.isAttribute, __indexOf.call(attrs, _ref) >= 0) {
+        this.id = attrs[this.idAttribute];
+      }
+      for (attr in attrs) {
+        val = attrs[attr];
+        if (!_.isEqual(current[attr], val)) {
+          changes.push(attr);
+        }
+        if (!_.isEqual(prev[attr], val)) {
+          this.changed[attr] = val;
+        } else {
+          delete this.changed[attr];
+        }
+        if (unset) {
+          delete current[attr];
+        } else {
+          current[attr] = val;
+        }
+        attr;
+      }
+      if (!silent) {
+        if (changes.length) {
+          this._pending = options;
+        }
+        for (_i = 0, _len = changes.length; _i < _len; _i++) {
+          c = changes[_i];
+          this.trigger('change:' + c, this, current[c], options);
+        }
+      }
+      this._pending = false;
+      this._changing = false;
+      return this;
+    },
+
+    /*输出属性，出发changing事件 */
     unset: function(attr, options) {
       return this.set(attr, {}, _.extend({}, options, {
         unset: true
@@ -347,15 +411,156 @@
       }
       return _.has(this.changed, attr);
     },
-    changeAttributes: function(diff) {},
-    previous: function(attr) {},
-    previousAttributes: function() {},
+
+    /* */
+    changeAttributes: function(diff) {
+      var attrDiff, changed, old, val, _i, _len;
+      if (!diff) {
+        if (this.hasChanged()) {
+          return _.clone(this.changed);
+        } else {
+          return false;
+        }
+      }
+      old = this._changing ? this._previousAttributes : this.attributes;
+      for (_i = 0, _len = diff.length; _i < _len; _i++) {
+        attrDiff = diff[_i];
+        if (_.isEqual(old[attr], (val = attrDiff))) {
+          continue;
+        }
+        (changed || (changed = {}))[attrDiff] = val;
+      }
+      return this;
+    },
+
+    /*获取属性原先的值 */
+    previous: function(attr) {
+      if (attr === null || !this._previousAttributes) {
+        return null;
+      }
+      return this._previousAttributes[attr];
+    },
+
+    /*获取对象原有属性 */
+    previousAttributes: function() {
+      return _.clone(this._previousAttributes);
+    },
 
     /*获取数据 */
-    fetch: function(options) {},
-    save: function(key, val, options) {},
-    destroy: function(options) {},
-    url: function() {},
+    fetch: function(options) {
+      var model, success;
+      options = options ? _.clone(options) : {};
+      if (options.parse) {
+        options.parse = true;
+      }
+      model = this;
+      success = options.success;
+      options.success = function(resp) {
+        if (!model.set(model.parse(resp, options))) {
+          return false;
+        }
+        if (success) {
+          success(model, resp, options);
+        }
+        return model.trigger('sync', model, resp, options);
+      };
+      wrapError(this, options);
+      return this.sync('read', this, options);
+    },
+    save: function(key, val, options) {
+      var attrs, method, model, success, xhr;
+      if (key === null || typeof key === 'object') {
+        attrs = key;
+        options = val;
+      } else {
+        (attrs = {})[key] = val;
+      }
+      options = _.extend({
+        validate: true
+      }, options);
+      if (attrs && !options.wait) {
+        if (!this.set(attrs, options)) {
+          return false;
+        }
+      } else {
+        if (!this._validate(attrs, options)) {
+          return false;
+        }
+      }
+      if (attrs && options.wait) {
+        this.attributes = _.extend({}, attributes, attrs);
+      }
+      if (options.parse === null) {
+        options.parse = true;
+      }
+      model = this;
+      success = options.success;
+      options.success = function(resp) {
+        var serverAttrs;
+        model.attributes = attributes;
+        serverAttrs = model.parse(resp, options);
+        if (options.wait) {
+          serverAttrs = _.extend(attrs || {}, serverAttrs);
+        }
+        if (_.isObject(serverAttrs && !model.set(serverAttrs, options))) {
+          return false;
+        }
+        if (success) {
+          success(model, resp, options);
+        }
+        return model.trigger('sync', model, resp, options);
+      };
+      wrapError(this, options);
+      method = this.isNew() ? 'create' : (options.patch ? 'patch' : 'update');
+      if (method === 'patch') {
+        options.attrs = attrs;
+      }
+      xhr = this.sync(method, this, options);
+      if (attrs && options.wait) {
+        this.attributes = attributes;
+      }
+      return xhr;
+    },
+
+    /*释放 */
+    destroy: function(options) {
+      var destroy, model, success, xhr;
+      options = options ? _.close(options) : {};
+      model = this;
+      success = options.success;
+      destroy = function() {
+        return model.trigger('destroy', model, model.collection, options);
+      };
+      options.success = function(resp) {
+        if (options.wait || model.isNew()) {
+          destroy();
+        }
+        if (success) {
+          success(model, resp, options);
+        }
+        if (!model.isNew()) {
+          return model.trigger('sync', model, resp, options);
+        }
+      };
+      if (this.isNew()) {
+        options.success();
+        return false;
+      }
+      wrapError(this, options);
+      xhr = this.sync('delete', this, options);
+      if (!options.wait) {
+        destroy();
+      }
+      return xhr;
+    },
+    url: function() {
+      var base;
+      base = _.result(this, 'urlRoot' || _.result(this.collection, 'url' || urlError()));
+      if (this.isNew()) {
+        return base;
+      }
+      return base.replace(/([^\/])$/, '$1/') + encodeURIComponent(this.id);
+    },
     parse: function(resp, options) {},
     clone: function() {},
     isNew: function() {},

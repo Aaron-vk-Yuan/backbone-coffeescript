@@ -230,8 +230,9 @@
 		###返回对象所有属性的副本###
 		toJson: (options)->
 			_.clone @attributes
+		###Backbone.sync 代理，可以自重写###
 		sync: ->
-			@attributes[attr]
+			Backbone.sync.apply @, arguments
 		###读取属性###
 		get: (attr)->
 			@attributes[attr]
@@ -242,7 +243,51 @@
 			@get attr != null
 		###设置属性值###
 		set: (key, val, options)->
+			return @ if key is null
+			#处理 'key','value' 以及 {key: value}
+			if typeof key is 'object'
+				attrs = key
+				options = val
+			else
+				(attrs ={})[key] = val
+			options || options = {}
 
+			#验证
+			return false if not @_validate attrs, options
+			unset = options.unset
+			silent = options.silent
+			changes = []
+			changing = @_changing
+			@_changing = true
+
+			if not changing
+				@_previousAttributes = _.clone @attributes
+				@changed = {}
+			current = @attributes
+			prev = @_previousAttributes
+
+			if @isAttribute in attrs 
+				@id = attrs[@idAttribute]
+			for attr of attrs
+				val = attrs[attr]
+				if not _.isEqual current[attr], val
+					changes.push attr
+				if not _.isEqual prev[attr], val
+					@.changed[attr] = val
+				else 
+					delete @changed[attr]
+				if unset then delete current[attr] else current[attr] = val
+				attr
+
+			if not silent
+				if changes.length
+					@_pending = options
+				for c in changes
+					@trigger 'change:' + c, @, current[c], options
+			@_pending = false
+			@_changing = false
+			@
+		###输出属性，出发changing事件###
 		unset: (attr, options)->
 			@set attr, {}, _.extend {}, options,
 				unset: true
@@ -257,20 +302,104 @@
 			if attr is null 
 				return !_.isEmpty @changed
 			_.has @changed, attr
+		###  ###
 		changeAttributes: (diff)->
-
+			if not diff
+				return if @hasChanged() then _.clone @changed else false
+			old = if @_changing  then @_previousAttributes else @attributes
+			for attrDiff in diff
+				if _.isEqual old[attr], (val = attrDiff)
+					continue
+				(changed || changed = {})[attrDiff] = val
+			@
+		###获取属性原先的值###	
 		previous: (attr)->
-
+			return null if attr is null or not @_previousAttributes
+			@_previousAttributes[attr]
+		###获取对象原有属性###
 		previousAttributes: ->
+			_.clone @_previousAttributes
 
 		###获取数据###
 		fetch: (options)->
+			options = if options then _.clone options else {}
+			options.parse = true if options.parse
+			model = @
+			success = options.success
+			options.success = (resp)->
+				return false if not model.set model.parse resp, options
+				success model, resp, options if success
+				model.trigger 'sync', model, resp, options
+			wrapError @, options
+			@sync 'read', @, options
 
 		save: (key, val, options)->
+			if key is null or typeof key is 'object'
+				attrs = key
+				options = val
+			else
+				(attrs = {})[key] = val
+			options = _.extend
+				validate: true , options
+			if attrs and not options.wait
+				return false if not @set attrs, options
+			else 
+				return false if not @_validate attrs, options
+			if attrs and options.wait
+				@attributes = _.extend {}, attributes, attrs
 
+			if options.parse is null 
+				options.parse = true 
+			model = @
+			success = options.success
+			options.success = (resp)->
+				model.attributes = attributes
+				serverAttrs = model.parse resp, options
+				if options.wait 
+					serverAttrs = _.extend attrs || {}, serverAttrs
+				if _.isObject serverAttrs and not model.set serverAttrs, options
+					return false
+				if success 
+					success model, resp, options
+				model.trigger 'sync', model, resp, options
+			wrapError @, options
+
+			method = if @isNew() then 'create' else (if options.patch then 'patch' else 'update')
+			if method is 'patch'
+				options.attrs = attrs
+			xhr = @sync method, @, options
+
+			if attrs and options.wait 
+				@attributes = attributes
+
+			xhr
+		###释放###
 		destroy: (options)->
-
+			options = if options then _.close options else {}
+			model = this
+			success = options.success
+			destroy = ->
+				model.trigger 'destroy', model, model.collection, options
+			options.success = (resp)->
+				if options.wait or model.isNew()
+					destroy()
+				if success
+					success model, resp, options
+				if not model.isNew()
+					model.trigger 'sync', model, resp, options
+			if @isNew()
+				options.success()
+				return false
+			wrapError @, options
+			xhr = @sync 'delete', @, options
+			if not options.wait
+				destroy()
+			xhr
 		url: ->
+			base = _.result @,'urlRoot' or _.result @collection, 'url' or urlError()
+			if @isNew()
+				return base
+			base.replace(/([^\/])$/, '$1/') + encodeURIComponent @.id
 
 		parse: (resp, options)->
 
